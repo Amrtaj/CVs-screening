@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- Load pdf.js library globally before the module script -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- Load mammoth.js for client-side DOCX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.4.13/mammoth.browser.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -113,7 +115,7 @@
             <label for="jobDescriptionFile" class="block text-sm font-medium text-gray-700 mb-2">Upload Job Description (JD) File (PDF, DOCX, TXT):</label>
             <input type="file" id="jobDescriptionFile" accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
             <p class="text-sm text-gray-500 mt-1">
-                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable.
             </p>
         </div>
 
@@ -129,7 +131,7 @@
             <label for="cvFiles" class="block text-sm font-medium text-gray-700 mb-2">Upload CVs (PDF, DOCX, TXT - multiple files allowed):</label>
             <input type="file" id="cvFiles" multiple accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
             <p class="text-sm text-gray-500 mt-1">
-                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable.
             </p>
         </div>
 
@@ -263,22 +265,15 @@
         }
 
         /**
-         * Extracts text from a DOCX file.
-         * Note: This is a placeholder. Real DOCX parsing is complex and requires a dedicated library or server-side processing.
-         * For a client-side solution, you'd typically use a library like 'mammoth.browser.js' or similar.
-         * For this example, we'll return a message indicating it's not fully supported.
+         * Extracts text from a DOCX file using mammoth.js.
          * @param {File} file - The DOCX file object.
-         * @returns {Promise<string>} A promise that resolves with a placeholder message.
+         * @returns {Promise<string>} A promise that resolves with the extracted text.
          */
         async function extractTextFromDocx(file) {
-            // In a real application, you would use a library like mammoth.browser.js
-            // Example (requires including mammoth.browser.js in your HTML):
-            /*
             const arrayBuffer = await file.arrayBuffer();
+            // Use mammoth.extractRawText as it's now globally available
             const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             return result.value; // The raw text
-            */
-            return `[Note: Text extraction for DOCX files is not fully supported in this client-side demo. Please ensure the file text is selectable or try converting to PDF/TXT first.] File: ${file.name}`;
         }
 
         /**
