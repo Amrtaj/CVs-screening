@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Screener</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Load pdf.js library globally before the module script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+        .container {
+            max-width: 1024px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .report-card {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .score-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .score-met {
+            background-color: #10b981; /* Green */
+        }
+        .score-not-met {
+            background-color: #ef4444; /* Red */
+        }
+        .score-partial {
+            background-color: #f59e0b; /* Orange */
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 700px;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">CV Screening Application</h1>
+
+        <div class="mb-6">
+            <label for="jobDescriptionFile" class="block text-sm font-medium text-gray-700 mb-2">Upload Job Description (JD) File (PDF, DOCX, TXT):</label>
+            <input type="file" id="jobDescriptionFile" accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
+            <p class="text-sm text-gray-500 mt-1">
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
+            </p>
+        </div>
+
+        <div class="mb-6">
+            <label for="maxAge" class="block text-sm font-medium text-gray-700 mb-2">Maximum Required Age (Optional):</label>
+            <input type="number" id="maxAge" placeholder="e.g., 40" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            <p class="text-sm text-gray-500 mt-1">
+                Enter the maximum age required for the role. This will be used to evaluate the 'Age' factor.
+            </p>
+        </div>
+
+        <div class="mb-6">
+            <label for="cvFiles" class="block text-sm font-medium text-gray-700 mb-2">Upload CVs (PDF, DOCX, TXT - multiple files allowed):</label>
+            <input type="file" id="cvFiles" multiple accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
+            <p class="text-sm text-gray-500 mt-1">
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
+            </p>
+        </div>
+
+        <button id="screenCvButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-md transition duration-300 ease-in-out flex items-center justify-center">
+            <span id="buttonText">Screen CVs</span>
+            <div id="loadingSpinner" class="loading-spinner ml-2 hidden"></div>
+        </button>
+
+        <div id="results" class="mt-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 hidden" id="resultsTitle">Screening Results:</h2>
+            <!-- Results will be dynamically inserted here -->
+        </div>
+
+        <div id="errorMessage" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative" role="alert">
+            <strong class="font-bold">Error!</strong>
+            <span class="block sm:inline" id="errorText"></span>
+        </div>
+    </div>
+
+    <!-- Modal for displaying generated content -->
+    <div id="contentModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" id="closeModalBtn">&times;</span>
+            <h3 class="text-xl font-bold mb-4" id="modalTitle"></h3>
+            <div id="modalContent" class="whitespace-pre-wrap text-gray-700 text-sm mb-4 p-3 border border-gray-300 rounded-md bg-gray-50 max-h-96 overflow-y-auto"></div>
+            <button id="copyContentBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md transition duration-300 ease-in-out">
+                Copy to Clipboard
+            </button>
+            <span id="copyConfirmation" class="ml-3 text-sm text-green-700 hidden">Copied!</span>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Set PDF.js worker source. pdfjsLib is now globally available because of the script tag in head.
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        } else {
+            console.error("pdfjsLib is not defined. PDF functionality may not work.");
+        }
+
+        // Global variables for Firebase (provided by the Canvas environment)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth, userId;
+        let globalJdContent = ''; // Store JD content globally for use in new functions
+        let globalCvContents = {}; // Store CV contents by originalFileName
+
+        // Initialize Firebase and authenticate
+        async function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid || crypto.randomUUID();
+                console.log("Firebase initialized and authenticated. User ID:", userId);
+            } catch (error) {
+                console.error("Error initializing Firebase or authenticating:", error);
+                displayMessage("Failed to initialize Firebase. Please try again.", true);
+            }
+        }
+
+        // Call Firebase initialization on window load
+        window.onload = initializeFirebase;
+
+        const screenCvButton = document.getElementById('screenCvButton');
+        const jobDescriptionFileInput = document.getElementById('jobDescriptionFile');
+        const maxAgeInput = document.getElementById('maxAge');
+        const cvFilesInput = document.getElementById('cvFiles');
+        const resultsDiv = document.getElementById('results');
+        const resultsTitle = document.getElementById('resultsTitle');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const buttonText = document.getElementById('buttonText');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const errorTextSpan = document.getElementById('errorText');
+
+        // Modal elements
+        const contentModal = document.getElementById('contentModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        const copyContentBtn = document.getElementById('copyContentBtn');
+        const copyConfirmation = document.getElementById('copyConfirmation');
+
+        // Function to display messages (errors or info)
+        function displayMessage(message, isError = false) {
+            errorMessageDiv.classList.remove('hidden');
+            errorTextSpan.textContent = message;
+            if (isError) {
+                errorMessageDiv.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+                errorMessageDiv.classList.remove('bg-green-100', 'border-green-400', 'text-green-700');
+            } else {
+                errorMessageDiv.classList.add('bg-green-100', 'border-green-400', 'text-green-700');
+                errorMessageDiv.classList.remove('bg-red-100', 'border-red-400', 'text-red-700');
+            }
+        }
+
+        // Function to hide messages
+        function hideMessage() {
+            errorMessageDiv.classList.add('hidden');
+        }
+
+        /**
+         * Extracts text from a PDF file.
+         * @param {File} file - The PDF file object.
+         * @returns {Promise<string>} A promise that resolves with the extracted text.
+         */
+        async function extractTextFromPdf(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            // Use pdfjsLib.getDocument as it's now globally available
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+            return fullText;
+        }
+
+        /**
+         * Extracts text from a DOCX file.
+         * Note: This is a placeholder. Real DOCX parsing is complex and requires a dedicated library or server-side processing.
+         * For a client-side solution, you'd typically use a library like 'mammoth.browser.js' or similar.
+         * For this example, we'll return a message indicating it's not fully supported.
+         * @param {File} file - The DOCX file object.
+         * @returns {Promise<string>} A promise that resolves with a placeholder message.
+         */
+        async function extractTextFromDocx(file) {
+            // In a real application, you would use a library like mammoth.browser.js
+            // Example (requires including mammoth.browser.js in your HTML):
+            /*
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            return result.value; // The raw text
+            */
+            return `[Note: Text extraction for DOCX files is not fully supported in this client-side demo. Please ensure the file text is selectable or try converting to PDF/TXT first.] File: ${file.name}`;
+        }
+
+        /**
+         * Reads text from a plain text file.
+         * @param {File} file - The text file object.
+         * @returns {Promise<string>} A promise that resolves with the file content.
+         */
+        function extractTextFromTxt(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+
+        /**
+         * Copies text to the clipboard.
+         * @param {string} text - The text to copy.
+         */
+        function copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            copyConfirmation.classList.remove('hidden');
+            setTimeout(() => {
+                copyConfirmation.classList.add('hidden');
+            }, 2000);
+        }
+
+        /**
+         * Displays content in a modal.
+         * @param {string} title - The title of the modal.
+         * @param {string} content - The content to display.
+         */
+        function showModal(title, content) {
+            modalTitle.textContent = title;
+            modalContent.textContent = content;
+            copyContentBtn.onclick = () => copyToClipboard(content);
+            contentModal.classList.remove('hidden');
+        }
+
+        // Close modal when close button is clicked
+        closeModalBtn.addEventListener('click', () => {
+            contentModal.classList.add('hidden');
+        });
+
+        // Close modal when clicking outside the modal content
+        window.addEventListener('click', (event) => {
+            if (event.target === contentModal) {
+                contentModal.classList.add('hidden');
+            }
+        });
+
+        /**
+         * Generates interview questions using the LLM.
+         * @param {string} jdContent - The job description content.
+         * @param {string} cvContent - The candidate's CV content.
+         * @param {string} candidateName - The candidate's name.
+         * @param {HTMLButtonElement} button - The button element to manage loading state.
+         */
+        async function generateInterviewQuestions(jdContent, cvContent, candidateName, button) {
+            button.disabled = true;
+            button.innerHTML = '<div class="loading-spinner"></div> Generating...';
+            hideMessage();
+
+            try {
+                const prompt = `Based on the following Job Description (JD) and Candidate CV, generate 5-7 relevant interview questions for ${candidateName}. Focus on questions that assess their experience, skills, and fit for the role as described in the JD and demonstrated in their CV.
+
+                **Job Description:**
+                ${jdContent}
+
+                **Candidate CV:**
+                ${cvContent}
+
+                Provide only the questions, formatted as a numbered list.`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "text/plain", // Expecting plain text questions
+                    }
+                };
+
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} ${response.statusText} - ${errorData.error.message}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const questions = result.candidates[0].content.parts[0].text;
+                    showModal(`Interview Questions for ${candidateName}`, questions);
+                } else {
+                    displayMessage("Failed to generate interview questions. Please try again.", true);
+                }
+            } catch (error) {
+                console.error("Error generating interview questions:", error);
+                displayMessage(`Error generating questions: ${error.message}`, true);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Generate Interview Questions ✨';
+            }
+        }
+
+        /**
+         * Generates an apology email using the LLM.
+         * @param {string} candidateName - The candidate's name.
+         * @param {string} jdContent - The job description content (for context).
+         * @param {HTMLButtonElement} button - The button element to manage loading state.
+         */
+        async function generateApologyEmail(candidateName, jdContent, button) {
+            button.disabled = true;
+            button.innerHTML = '<div class="loading-spinner"></div> Generating...';
+            hideMessage();
+
+            try {
+                const prompt = `Write a polite and professional apology email to ${candidateName} for a job application. The email should inform them that they have not been selected for the role. Briefly mention the role (referencing the JD provided below for context, but do not include the full JD in the email). Keep it concise and thank them for their interest.
+
+                **Job Description Context:**
+                ${jdContent}
+
+                **Candidate Name:** ${candidateName}
+
+                Provide only the email body, starting with "Dear [Candidate Name],".`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "text/plain", // Expecting plain text email
+                    }
+                };
+
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} ${response.statusText} - ${errorData.error.message}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const email = result.candidates[0].content.parts[0].text;
+                    showModal(`Apology Email for ${candidateName}`, email);
+                } else {
+                    displayMessage("Failed to generate apology email. Please try again.", true);
+                }
+            } catch (error) {
+                console.error("Error generating apology email:", error);
+                displayMessage(`Error generating email: ${error.message}`, true);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Generate Apology Email ✉️';
+            }
+        }
+
+
+        screenCvButton.addEventListener('click', async () => {
+            hideMessage(); // Clear previous messages
+            const jdFile = jobDescriptionFileInput.files[0]; // Get the single JD file
+            const maxAge = maxAgeInput.value.trim(); // Get the maximum age input
+            const cvFiles = cvFilesInput.files;
+
+            if (!jdFile) {
+                displayMessage("Please upload the Job Description file.", true);
+                return;
+            }
+            if (cvFiles.length === 0) {
+                displayMessage("Please upload at least one CV file.", true);
+                return;
+            }
+
+            resultsDiv.innerHTML = ''; // Clear previous results
+            resultsTitle.classList.add('hidden'); // Hide title until results are ready
+            loadingSpinner.classList.remove('hidden');
+            buttonText.textContent = 'Reading Files...';
+            screenCvButton.disabled = true;
+
+            let jdContent = '';
+            globalCvContents = {}; // Clear previous CV contents
+
+            try {
+                // Process JD file
+                const jdFileExtension = jdFile.name.split('.').pop().toLowerCase();
+                buttonText.textContent = `Processing JD: ${jdFile.name}...`;
+                if (jdFileExtension === 'pdf') {
+                    jdContent = await extractTextFromPdf(jdFile);
+                } else if (jdFileExtension === 'doc' || jdFileExtension === 'docx') {
+                    jdContent = await extractTextFromDocx(jdFile);
+                } else if (jdFileExtension === 'txt') {
+                    jdContent = await extractTextFromTxt(jdFile);
+                } else {
+                    displayMessage(`Unsupported file type for JD: ${jdFile.name}. Only PDF, DOCX, and TXT are supported.`, true);
+                    screenCvButton.disabled = false;
+                    loadingSpinner.classList.add('hidden');
+                    buttonText.textContent = 'Screen CVs';
+                    return;
+                }
+                globalJdContent = jdContent; // Store JD content globally
+
+                if (!jdContent.trim()) {
+                    displayMessage("Could not extract meaningful content from the Job Description file. Please ensure it is text-selectable.", true);
+                    screenCvButton.disabled = false;
+                    loadingSpinner.classList.add('hidden');
+                    buttonText.textContent = 'Screen CVs';
+                    return;
+                }
+
+                // Process CV files
+                for (let i = 0; i < cvFiles.length; i++) {
+                    const file = cvFiles[i];
+                    let fileContent = '';
+                    const fileExtension = file.name.split('.').pop().toLowerCase();
+
+                    buttonText.textContent = `Processing CV: ${file.name}...`;
+
+                    if (fileExtension === 'pdf') {
+                        fileContent = await extractTextFromPdf(file);
+                    } else if (fileExtension === 'doc' || fileExtension === 'docx') {
+                        fileContent = await extractTextFromDocx(file);
+                    } else if (fileExtension === 'txt') {
+                        fileContent = await extractTextFromTxt(file);
+                    } else {
+                        displayMessage(`Unsupported file type for CV: ${file.name}. Only PDF, DOCX, and TXT are supported.`, true);
+                        screenCvButton.disabled = false;
+                        loadingSpinner.classList.add('hidden');
+                        buttonText.textContent = 'Screen CVs';
+                        return;
+                    }
+                    globalCvContents[file.name] = fileContent; // Store CV content globally by file name
+                }
+
+                const cvsRaw = Object.entries(globalCvContents).map(([fileName, content]) => `---CV_START_FILENAME:${fileName}---\n${content}`).join('\n---NEW_CV---\n');
+
+
+                if (!cvsRaw.trim()) {
+                    displayMessage("Could not extract meaningful content from the uploaded CVs. Please ensure they are text-selectable.", true);
+                    screenCvButton.disabled = false;
+                    loadingSpinner.classList.add('hidden');
+                    buttonText.textContent = 'Screen CVs';
+                    return;
+                }
+
+                buttonText.textContent = 'Screening CVs...'; // Change text for AI processing phase
+
+                // Construct the prompt for the LLM, including maxAge if provided
+                let prompt = `You are a CV screening assistant. I will provide a Job Description (JD) and one or more CVs. Your task is to evaluate each CV against the JD based on the following 8 factors, giving a score and detailed explanation for each. Each factor has equal weight, except for 'Technical Competencies' which scores 1 point for each matched competency.`;
+
+                if (maxAge) {
+                    prompt += `\n\nFor the 'Age' factor, the maximum required age is ${maxAge} years.`;
+                }
+
+                prompt += `
+                **JD:**
+                ${jdContent}
+
+                **CVs (each CV starts with ---CV_START_FILENAME:[filename]--- and are separated by ---NEW_CV---):**
+                ${cvsRaw}
+
+                **Evaluation Factors (Score 1 if met, 0 if not, for Technical Competencies score 1 for each matched):**
+                1.  **Year of experience:** Compare the required years of experience in JD with years mentioned in CV.
+                2.  **Relevant area of experience:** Compare required experience in JD with details in CV.
+                3.  **Age:** Estimate candidate's age (using birth date, graduation date, first job date, or email for year) and compare it with the maximum required age (if provided). State estimated age and basis. If age estimation is not possible, state that.
+                4.  **Graduation type:** Compare required Graduation type (Diploma, BSc, MSc, PhD) in JD with CV.
+                5.  **Technical Competencies:** First, identify *all* technical competencies mentioned in the JD. Then, for each CV, give 1 point for each *matched* competency. In your response, include 'matchedCompetencies' (array of strings), 'totalCompetenciesInJD' (number, total count from JD), and 'allCompetenciesInJD' (array of strings, all competencies from JD).
+                6.  **Job Title:** Compare required Job Title in JD with CV. (Exact match not necessary, similar roles count).
+                7.  **Language:** Check if candidate has required languages from JD. Award 1 point ONLY if the candidate explicitly mentions their proficiency (e.g., "Fluent in English", "Native Spanish speaker", "Proficient in French") in the CV for a language required by the JD. Do NOT award a point based on the CV's overall language or inferred proficiency.
+                8.  **Certificates:** Check if candidate has required Certificates from JD. If the candidate possesses *any* certificate relevant to the JD, award 1 point.
+
+                Provide the output as a JSON array of candidate reports. Each report should have 'candidateName' (try to extract from CV, if not found use the filename provided at the start of the CV content after '---CV_START_FILENAME:'), 'originalFileName' (the exact filename provided), 'totalScore' (sum of all factor scores), and a 'report' object containing details for each factor. The 'score' for each factor should be a number (0, 1, or count for technical competencies). The 'details' should be a string explaining the evaluation.
+                `;
+
+                // Define the JSON schema for the structured response
+                const responseSchema = {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            "candidateName": { "type": "STRING" },
+                            "originalFileName": { "type": "STRING" }, // Added for easier mapping
+                            "totalScore": { "type": "NUMBER" },
+                            "report": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "yearOfExperience": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "relevantAreaOfExperience": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "age": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "graduationType": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "technicalCompetencies": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" },
+                                            "matchedCompetencies": { "type": "ARRAY", "items": { "type": "STRING" } },
+                                            "totalCompetenciesInJD": { "type": "NUMBER" }, // Total from JD
+                                            "allCompetenciesInJD": { "type": "ARRAY", "items": { "type": "STRING" } } // All from JD
+                                        }
+                                    },
+                                    "jobTitle": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "language": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    },
+                                    "certificates": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "score": { "type": "NUMBER" },
+                                            "details": { "type": "STRING" }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "propertyOrdering": [
+                            "candidateName",
+                            "originalFileName",
+                            "totalScore",
+                            "report"
+                        ]
+                    }
+                };
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: responseSchema
+                    }
+                };
+
+                const apiKey = ""; // Canvas will provide this if empty for gemini-2.0-flash
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} ${response.statusText} - ${errorData.error.message}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const jsonString = result.candidates[0].content.parts[0].text;
+                    const parsedResults = JSON.parse(jsonString);
+
+                    if (parsedResults.length > 0) {
+                        resultsTitle.classList.remove('hidden');
+
+                        // Sort the results by totalScore in descending order
+                        parsedResults.sort((a, b) => b.totalScore - a.totalScore);
+
+                        parsedResults.forEach(candidate => {
+                            const candidateCard = document.createElement('div');
+                            candidateCard.className = 'report-card';
+
+                            // Calculate total score based on the sum of individual factor scores
+                            const scoreSum = Object.values(candidate.report).reduce((sum, factor) => sum + factor.score, 0);
+
+                            // Calculate max possible score for technical competencies (from JD)
+                            const maxPossibleScoreForTech = candidate.report.technicalCompetencies.totalCompetenciesInJD !== undefined ? candidate.report.technicalCompetencies.totalCompetenciesInJD : 0;
+                            // There are 7 fixed factors (each max 1 point) + variable tech competencies
+                            const maxPossibleScore = 7 + maxPossibleScoreForTech;
+
+                            // Use candidateName from LLM or fallback to originalFileName
+                            const displayCandidateName = candidate.candidateName || candidate.originalFileName || 'Unknown Candidate';
+
+                            candidateCard.innerHTML = `
+                                <h3 class="text-2xl font-bold text-blue-800 mb-4">${displayCandidateName}</h3>
+                                <p class="text-xl font-semibold mb-4">Total Score: ${scoreSum} / ${maxPossibleScore}</p>
+                                <div class="space-y-3">
+                                    ${Object.entries(candidate.report).map(([key, value]) => {
+                                        const factorName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                        let scoreColorClass = '';
+                                        // For technical competencies, score > 0 means partial or full match
+                                        if (key === 'technicalCompetencies') {
+                                            if (value.score > 0 && value.score === maxPossibleScoreForTech && maxPossibleScoreForTech > 0) {
+                                                scoreColorClass = 'score-met'; // All matched
+                                            } else if (value.score > 0) {
+                                                scoreColorClass = 'score-partial'; // Some matched
+                                            } else {
+                                                scoreColorClass = 'score-not-met'; // None matched
+                                            }
+                                        } else {
+                                            if (value.score === 1) {
+                                                scoreColorClass = 'score-met';
+                                            } else {
+                                                scoreColorClass = 'score-not-met';
+                                            }
+                                        }
+
+                                        let additionalDetails = '';
+                                        if (key === 'technicalCompetencies') {
+                                            if (value.matchedCompetencies && value.matchedCompetencies.length > 0) {
+                                                additionalDetails += `<p class="text-sm text-gray-600 mt-1">Matched: ${value.matchedCompetencies.join(', ')}</p>`;
+                                            }
+                                            if (value.allCompetenciesInJD && value.allCompetenciesInJD.length > 0) {
+                                                additionalDetails += `<p class="text-sm text-gray-600 mt-1">JD Competencies: ${value.allCompetenciesInJD.join(', ')}</p>`;
+                                            }
+                                        }
+
+                                        return `
+                                            <div class="p-3 bg-white rounded-md border border-gray-200">
+                                                <p class="font-semibold text-gray-800 flex items-center">
+                                                    <span class="score-indicator ${scoreColorClass}"></span>
+                                                    ${factorName}: <span class="ml-2">${value.score} point(s)</span>
+                                                </p>
+                                                <p class="text-gray-700 text-sm mt-1">${value.details}</p>
+                                                ${additionalDetails}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                <div class="mt-4 flex flex-col sm:flex-row gap-3">
+                                    <button class="generate-questions-btn w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-md transition duration-300 ease-in-out flex items-center justify-center"
+                                            data-candidate-name="${displayCandidateName}"
+                                            data-original-file-name="${candidate.originalFileName}">
+                                        Generate Interview Questions ✨
+                                    </button>
+                                    <button class="generate-apology-email-btn w-full sm:w-auto bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 ease-in-out flex items-center justify-center"
+                                            data-candidate-name="${displayCandidateName}"
+                                            data-original-file-name="${candidate.originalFileName}">
+                                        Generate Apology Email ✉️
+                                    </button>
+                                </div>
+                            `;
+                            resultsDiv.appendChild(candidateCard);
+                        });
+
+                        // Attach event listeners to the new buttons after they are added to the DOM
+                        document.querySelectorAll('.generate-questions-btn').forEach(button => {
+                            button.addEventListener('click', () => {
+                                const candidateName = button.dataset.candidateName;
+                                const originalFileName = button.dataset.originalFileName;
+                                const cvContent = globalCvContents[originalFileName];
+                                generateInterviewQuestions(globalJdContent, cvContent, candidateName, button);
+                            });
+                        });
+
+                        document.querySelectorAll('.generate-apology-email-btn').forEach(button => {
+                            button.addEventListener('click', () => {
+                                const candidateName = button.dataset.candidateName;
+                                generateApologyEmail(candidateName, globalJdContent, button);
+                            });
+                        });
+
+                    } else {
+                        displayMessage("No candidate reports were generated. Please check the CV content and try again.", true);
+                    }
+                } else {
+                    displayMessage("Failed to get a valid response from the AI. Please try again.", true);
+                }
+
+            } catch (error) {
+                console.error("Error during CV screening:", error);
+                displayMessage(`An error occurred: ${error.message}. Please check your input and try again.`, true);
+            } finally {
+                loadingSpinner.classList.add('hidden');
+                buttonText.textContent = 'Screen CVs';
+                screenCvButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
