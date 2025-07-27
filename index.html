@@ -8,8 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- Load pdf.js library globally before the module script -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <!-- Load mammoth.js for client-side DOCX parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.4.13/mammoth.browser.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -112,10 +110,18 @@
         <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">CV Screening Application</h1>
 
         <div class="mb-6">
+            <label for="geminiApiKey" class="block text-sm font-medium text-gray-700 mb-2">Gemini API Key:</label>
+            <input type="text" id="geminiApiKey" placeholder="Enter your Gemini API Key here" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            <p class="text-sm text-gray-500 mt-1">
+                <span class="font-semibold">Note:</span> You can obtain a Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Google AI Studio</a>. This key is required for the AI screening functionality.
+            </p>
+        </div>
+
+        <div class="mb-6">
             <label for="jobDescriptionFile" class="block text-sm font-medium text-gray-700 mb-2">Upload Job Description (JD) File (PDF, DOCX, TXT):</label>
             <input type="file" id="jobDescriptionFile" accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
             <p class="text-sm text-gray-500 mt-1">
-                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable.
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
             </p>
         </div>
 
@@ -131,7 +137,7 @@
             <label for="cvFiles" class="block text-sm font-medium text-gray-700 mb-2">Upload CVs (PDF, DOCX, TXT - multiple files allowed):</label>
             <input type="file" id="cvFiles" multiple accept=".pdf,.doc,.docx,.txt" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white">
             <p class="text-sm text-gray-500 mt-1">
-                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable.
+                <span class="font-semibold">Note:</span> For PDF/DOCX files, the application will attempt to extract text. For best results, ensure files are text-selectable. DOCX parsing is a client-side approximation and may not be fully accurate.
             </p>
         </div>
 
@@ -178,6 +184,7 @@
         }
 
         // Global variables for Firebase (provided by the Canvas environment)
+        // These are for internal Canvas environment use. For external use, the user-provided API key will be used.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -209,6 +216,7 @@
         // Call Firebase initialization on window load
         window.onload = initializeFirebase;
 
+        const geminiApiKeyInput = document.getElementById('geminiApiKey');
         const screenCvButton = document.getElementById('screenCvButton');
         const jobDescriptionFileInput = document.getElementById('jobDescriptionFile');
         const maxAgeInput = document.getElementById('maxAge');
@@ -265,15 +273,22 @@
         }
 
         /**
-         * Extracts text from a DOCX file using mammoth.js.
+         * Extracts text from a DOCX file.
+         * Note: This is a placeholder. Real DOCX parsing is complex and requires a dedicated library or server-side processing.
+         * For a client-side solution, you'd typically use a library like 'mammoth.browser.js' or similar.
+         * For this example, we'll return a message indicating it's not fully supported.
          * @param {File} file - The DOCX file object.
-         * @returns {Promise<string>} A promise that resolves with the extracted text.
+         * @returns {Promise<string>} A promise that resolves with a placeholder message.
          */
         async function extractTextFromDocx(file) {
+            // In a real application, you would use a library like mammoth.browser.js
+            // Example (requires including mammoth.browser.js in your HTML):
+            /*
             const arrayBuffer = await file.arrayBuffer();
-            // Use mammoth.extractRawText as it's now globally available
             const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
             return result.value; // The raw text
+            */
+            return `[Note: Text extraction for DOCX files is not fully supported in this client-side demo. Please ensure the file text is selectable or try converting to PDF/TXT first.] File: ${file.name}`;
         }
 
         /**
@@ -338,11 +353,19 @@
          * @param {string} cvContent - The candidate's CV content.
          * @param {string} candidateName - The candidate's name.
          * @param {HTMLButtonElement} button - The button element to manage loading state.
+         * @param {string} apiKey - The Gemini API key.
          */
-        async function generateInterviewQuestions(jdContent, cvContent, candidateName, button) {
+        async function generateInterviewQuestions(jdContent, cvContent, candidateName, button, apiKey) {
             button.disabled = true;
             button.innerHTML = '<div class="loading-spinner"></div> Generating...';
             hideMessage();
+
+            if (!apiKey) {
+                displayMessage("Please enter your Gemini API Key to generate interview questions.", true);
+                button.disabled = false;
+                button.innerHTML = 'Generate Interview Questions ✨';
+                return;
+            }
 
             try {
                 const prompt = `Based on the following Job Description (JD) and Candidate CV, generate 5-7 relevant interview questions for ${candidateName}. Focus on questions that assess their experience, skills, and fit for the role as described in the JD and demonstrated in their CV.
@@ -365,8 +388,6 @@
                     }
                 };
 
-                // The API key is now directly embedded here
-                const apiKey = "AIzaSyDZLc8uAh77xDcqR07Kb7D0w5N5ULLcjtE";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {
@@ -403,11 +424,19 @@
          * @param {string} candidateName - The candidate's name.
          * @param {string} jdContent - The job description content (for context).
          * @param {HTMLButtonElement} button - The button element to manage loading state.
+         * @param {string} apiKey - The Gemini API key.
          */
-        async function generateApologyEmail(candidateName, jdContent, button) {
+        async function generateApologyEmail(candidateName, jdContent, button, apiKey) {
             button.disabled = true;
             button.innerHTML = '<div class="loading-spinner"></div> Generating...';
             hideMessage();
+
+            if (!apiKey) {
+                displayMessage("Please enter your Gemini API Key to generate apology email.", true);
+                button.disabled = false;
+                button.innerHTML = 'Generate Apology Email ✉️';
+                return;
+            }
 
             try {
                 const prompt = `Write a polite and professional apology email to ${candidateName} for a job application. The email should inform them that they have not been selected for the role. Briefly mention the role (referencing the JD provided below for context, but do not include the full JD in the email). Keep it concise and thank them for their interest.
@@ -429,8 +458,6 @@
                     }
                 };
 
-                // The API key is now directly embedded here
-                const apiKey = "AIzaSyDZLc8uAh77xDcqR07Kb7D0w5N5ULLcjtE";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {
@@ -465,10 +492,15 @@
 
         screenCvButton.addEventListener('click', async () => {
             hideMessage(); // Clear previous messages
+            const apiKey = geminiApiKeyInput.value.trim(); // Get the API key from the input field
             const jdFile = jobDescriptionFileInput.files[0]; // Get the single JD file
             const maxAge = maxAgeInput.value.trim(); // Get the maximum age input
             const cvFiles = cvFilesInput.files;
 
+            if (!apiKey) {
+                displayMessage("Please enter your Gemini API Key to proceed with CV screening.", true);
+                return;
+            }
             if (!jdFile) {
                 displayMessage("Please upload the Job Description file.", true);
                 return;
@@ -672,8 +704,6 @@
                     }
                 };
 
-                // The API key is now directly embedded here
-                const apiKey = "AIzaSyDZLc8uAh77xDcqR07Kb7D0w5N5ULLcjtE";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {
@@ -730,7 +760,7 @@
                                             } else if (value.score > 0) {
                                                 scoreColorClass = 'score-partial'; // Some matched
                                             } else {
-                                                scoreColorClass = 'score-not-met';
+                                                scoreColorClass = 'score-not-met'; // None matched
                                             }
                                         } else {
                                             if (value.score === 1) {
@@ -784,14 +814,16 @@
                                 const candidateName = button.dataset.candidateName;
                                 const originalFileName = button.dataset.originalFileName;
                                 const cvContent = globalCvContents[originalFileName];
-                                generateInterviewQuestions(globalJdContent, cvContent, candidateName, button);
+                                // Pass the API key to the generation function
+                                generateInterviewQuestions(globalJdContent, cvContent, candidateName, button, apiKey);
                             });
                         });
 
                         document.querySelectorAll('.generate-apology-email-btn').forEach(button => {
                             button.addEventListener('click', () => {
                                 const candidateName = button.dataset.candidateName;
-                                generateApologyEmail(candidateName, globalJdContent, button);
+                                // Pass the API key to the generation function
+                                generateApologyEmail(candidateName, globalJdContent, button, apiKey);
                             });
                         });
 
